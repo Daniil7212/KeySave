@@ -20,7 +20,7 @@ mod config;
 
 // отправка сообщения в тг
 async fn bot(text: String) {
-    // Получаем токен бота и ID чата
+    // Получаем токен бота и ID  чата
     let bot_token = config::BOT_TOKEN;
     let chat_id = config::CHAT_ID;
 
