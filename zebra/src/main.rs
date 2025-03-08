@@ -9,7 +9,7 @@ use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::HHOOK;
 use winapi::um::winuser::{DispatchMessageA, GetMessageA, TranslateMessage, MSG};
 
-// для телеграма
+// для telegram
 use reqwest;
 use serde_json::json;
 use tokio;
