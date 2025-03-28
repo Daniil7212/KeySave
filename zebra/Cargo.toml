@@ -4,9 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winapi = { version = "0.3", features = ["winuser", "libloaderapi", "windef", "minwindef"] }
+winapi = { version = "0.3", features = [
+    "winuser",
+    "libloaderapi",
+    "processthreadsapi",
+    "tlhelp32",
+    "winnt",
+    "winbase",
+    "minwindef",
+    "windef"
+] }
 reqwest = { version = "0.12.12", features = ["json"] }
 tokio = { version = "1.0", features = ["full"] }
 serde_json = "1.0"
 dns-lookup = "2.0.4"
 winreg = "0.55.0"
+serde = { version = "1.0.217", features = ["derive"] }

