@@ -10,9 +10,7 @@ use winapi::shared::windef::HHOOK;
 use winapi::um::winuser::{DispatchMessageA, GetMessageA, TranslateMessage, MSG};
 
 // для telegram
-use reqwest;
 use tokio;
-use serde::{Deserialize, Serialize};
 
 // определение url
 use std::ptr::null_mut;

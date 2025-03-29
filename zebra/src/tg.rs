@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::{config};
+use reqwest;
 
 // Структуры для работы с Telegram API
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,19 +21,13 @@ struct Chat {
     id: i64,
 }
 
-#[derive(Debug, Serialize)]
-struct SendMessage {
-    chat_id: i64,
-    text: String,
-}
-
 // Проверка отправлял ли пользователь exit, и если да, то остановить прогу
 pub async fn check(len: usize) {
     let client = reqwest::Client::new();
     // Получаем обновления с обработкой ошибок
     match get_updates(&client, &format!("https://api.telegram.org/bot{}/", config::BOT_TOKEN), 0).await {
         Ok(updates) => {
-            if (updates.len() != len) {
+            if updates.len() != len {
                 if let Some(update) = updates.last() {  // <- Безопасный способ через .last()
 
                     if let Some(message) = &update.message {  // <- Также заимствуем message
