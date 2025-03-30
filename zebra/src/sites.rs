@@ -1,4 +1,8 @@
-use dns_lookup::lookup_host;
+use std::{
+    net::{IpAddr, ToSocketAddrs},
+    process::Command,
+    str::FromStr,
+};
 
 // Проверка соединений
 fn check_connections(ip: &str, port: u16) -> bool {
@@ -13,28 +17,31 @@ fn check_connections(ip: &str, port: u16) -> bool {
     output_str
         .lines()
         .filter(|line| line.contains("ESTABLISHED"))
-        .any(|line| {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 3 {
-                return false;
-            }
-            let remote = parts[2];
-            let remote_parts: Vec<&str> = remote.split(':').collect();
-            remote_parts.len() == 2
-                && remote_parts[0] == ip
-                && remote_parts[1].parse::<u16>().unwrap_or(0) == port
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace().nth(2)?;
+            let mut parts = parts.split(':');
+            Some((parts.next()?, parts.next()?))
+        })
+        .any(|(addr, port_str)| {
+            addr == ip && port_str.parse::<u16>().map_or(false, |p| p == port)
         })
 }
 
 // Проверка доступности сайта
 pub fn is_site_open(url: &str) -> bool {
-    if let Ok(ips) = lookup_host(url) {
-        ips.into_iter().any(|ip| {
-            let target_ip = ip.to_string();
-            let ports = vec![80, 443]; // HTTP и HTTPS
-            ports.into_iter().any(|port| check_connections(&target_ip, port))
-        })
-    } else {
-        false
+    if let Ok(ip) = IpAddr::from_str(url) {
+        return [80, 443].iter().any(|&port| check_connections(&ip.to_string(), port));
     }
+
+    url.to_socket_addrs()
+        .map(|addrs| {
+            addrs.filter_map(|addr| {
+                match addr {
+                    std::net::SocketAddr::V4(v4) => Some(v4.ip().to_string()),
+                    std::net::SocketAddr::V6(v6) => Some(v6.ip().to_string()),
+                }
+            })
+                .any(|ip| [80, 443].iter().any(|&port| check_connections(&ip, port)))
+        })
+        .unwrap_or(false)
 }

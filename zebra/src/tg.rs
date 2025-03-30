@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::{config};
-use reqwest;
+use crate::config;
+use reqwest::Client;
 
 // Структуры для работы с Telegram API
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,26 +23,22 @@ struct Chat {
 
 // Проверка отправлял ли пользователь exit, и если да, то остановить прогу
 pub async fn check(len: usize) {
-    let client = reqwest::Client::new();
+    let client = Client::new();
     // Получаем обновления с обработкой ошибок
     match get_updates(&client, &format!("https://api.telegram.org/bot{}/", config::BOT_TOKEN), 0).await {
-        Ok(updates) => {
-            if updates.len() != len {
-                if let Some(update) = updates.last() {  // <- Безопасный способ через .last()
-
-                    if let Some(message) = &update.message {  // <- Также заимствуем message
-                        if let Some(text) = &message.text {
-                            if text == "exit" {
-                                std::process::exit(0);  // Гарантированное завершение
-                            }
-                        }
-                    }
+        Ok(updates) if updates.len() != len => {
+            if let Some(Update {
+                message: Some(Message {
+                    text: Some(text), ..
+                }), ..
+            }) = updates.last() {
+                if text == "exit" {
+                    std::process::exit(0);
                 }
             }
         }
-        Err(e) => {
-            eprintln!("Ошибка при получении обновлений: {}", e);
-        }
+        Err(e) => eprintln!("Ошибка при получении обновлений: {}", e),
+        _ => {}
     }
 
     // Небольшая пауза между запросами
@@ -51,7 +47,7 @@ pub async fn check(len: usize) {
 
 
 // Возвращает последние отправленные в телеграмм сообщения
-async fn get_updates(client: &reqwest::Client, api_url: &str, offset: i64) -> Result<Vec<Update>, reqwest::Error> {
+async fn get_updates(client: &Client, api_url: &str, offset: i64) -> Result<Vec<Update>, reqwest::Error> {
     let response = client
         .get(format!("{}getUpdates", api_url))
         .query(&[("offset", offset), ("timeout", 30)])
@@ -74,7 +70,7 @@ pub async fn bot_sender(text: String) {
     let url = format!("https://api.telegram.org/bot{}/sendMessage", bot_token);
 
     // Создаем HTTP клиент
-    let client = reqwest::Client::new();
+    let client = Client::new();
 
     // Отправляем POST запрос с параметрами
     let _response = client.post(&url)

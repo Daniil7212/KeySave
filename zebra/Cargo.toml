@@ -17,6 +17,5 @@ winapi = { version = "0.3", features = [
 reqwest = { version = "0.12.12", features = ["json"] }
 tokio = { version = "1.0", features = ["full"] }
 serde_json = "1.0"
-dns-lookup = "2.0.4"
 winreg = "0.55.0"
 serde = { version = "1.0.217", features = ["derive"] }
