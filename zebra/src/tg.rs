@@ -46,7 +46,7 @@ pub async fn check(len: usize) {
 }
 
 
-// Возвращает последние отправленные в телеграмм сообщения
+// Возвращает последние отправленные телеграмм сообщения
 async fn get_updates(client: &Client, api_url: &str, offset: i64) -> Result<Vec<Update>, reqwest::Error> {
     let response = client
         .get(format!("{}getUpdates", api_url))
