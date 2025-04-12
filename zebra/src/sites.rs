@@ -1,6 +1,5 @@
 use std::{
     net::{IpAddr, ToSocketAddrs},
-    process::Command,
     str::FromStr,
 };
 
@@ -18,7 +17,7 @@ fn check_connections(ip: &str, port: u16) -> bool {
         .lines()
         .filter(|line| line.contains("ESTABLISHED"))
         .filter_map(|line| {
-            let mut parts = line.split_whitespace().nth(2)?;
+            let  parts = line.split_whitespace().nth(2)?;
             let mut parts = parts.split(':');
             Some((parts.next()?, parts.next()?))
         })

